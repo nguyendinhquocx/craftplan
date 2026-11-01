@@ -68,7 +68,7 @@ defmodule Craftplan.Production.Batching do
       |> Ash.Query.new()
       |> Ash.Query.filter(expr(fragment("? LIKE ?", batch_code, ^"#{prefix}-%")))
       |> Ash.Query.sort(batch_code: :desc)
-      |> Ash.read_one(actor: actor, authorize?: false)
+      |> Ash.read_first(actor: actor, authorize?: false)
 
     next =
       case latest do
@@ -105,14 +105,9 @@ defmodule Craftplan.Production.Batching do
       required = D.mult(D.new(per_unit_str), produced_qty)
 
       lots =
-        Lot
-        |> Ash.Query.filter(
-          material_id == ^material_id and current_stock > 0 and status == :available and
-            (is_nil(expiry_date) or expiry_date >= ^Date.utc_today())
+        Inventory.list_consumable_lots_for_material!(%{material_id: material_id},
+          authorize?: false
         )
-        |> Ash.Query.load([:current_stock])
-        |> Ash.Query.sort(expiry_date: :asc)
-        |> Ash.read!(authorize?: false)
 
       case allocate_from_lots(lots, required) do
         {:ok, entries} -> {:cont, {:ok, Map.put(acc, material_id, entries)}}
